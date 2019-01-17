@@ -21,6 +21,7 @@ class ObjectManager(object):
         self.connection = connection
         self.index = index
         self._select_keys = []
+        self._sort_keys = []
         self._filter_kwargs = {}
         self._exclude_kwargs = {}
         self._should_kwargs = {}
@@ -40,8 +41,13 @@ class ObjectManager(object):
         self._should_kwargs = kwargs
         return self
 
-    def select(self, *args, **kwargs):
+    def select(self, *args):
         self._select_keys = args
+        return self
+
+    def sort(self, *args):
+        # user '-' for descending order, e.g '-abc'
+        self._sort_keys = args
         return self
 
     def get(self, pks=None, pk_file=None, save_file=None, save_format='json', request_timeout=10):
@@ -133,8 +139,8 @@ class ObjectManager(object):
                 )
                 for hit in search.scan():
                     records.append(self._parse_record(hit))
-                    print(records[-1])
-                    if self._save_file and records == self.max_chunk_size:
+
+                    if self._save_file and len(records) == self.max_chunk_size:
                         self._save_records(records)
                         records[:] = []
 
@@ -162,12 +168,10 @@ class ObjectManager(object):
         return result.hits.total
 
     def _get_search_obj(self, size=0):
-        _query = query.ConstantScore(
-            filter = query.Bool(
-                must = self._build_query(self._filter_kwargs),
-                must_not = self._build_query(self._exclude_kwargs),
-                should = self._build_query(self._should_kwargs)
-            )
+        _query = query.Bool(
+            must = self._build_query(self._filter_kwargs),
+            must_not = self._build_query(self._exclude_kwargs),
+            should = self._build_query(self._should_kwargs)
         )
 
         search = Search(
@@ -177,8 +181,10 @@ class ObjectManager(object):
         .query(_query)\
         .source(self._select_keys)\
         .extra(size=size)\
-        .params(request_timeout=self._request_timeout)
-        print(search.to_dict())
+        .params(request_timeout=self._request_timeout)\
+        .sort(*self._sort_keys)
+
+        logger.info(json.dumps(result.to_dict()))
         return search
 
     def _save_records(self, records, append_mode=True):
