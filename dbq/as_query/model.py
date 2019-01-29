@@ -274,7 +274,7 @@ class ObjectManager(object):
 
                 current_count[0] += 1
                 if current_count[0] % 50000 == 0:
-                    logger.info('Total Scanned: %s/%s, Records Found: %s', current_count[0], total_records, current_count[1])
+                    logger.info('Total Records: %s/rf, Total Scanned: %s, Records Found: %s', total_records, current_count[0], current_count[1])
                     if self._save_file:
                         self._save_records(records, True)
                         records[:] = []  # clear
@@ -289,16 +289,16 @@ class ObjectManager(object):
     def get_total_objects(self):
         clusters_info = self.connection.info('sets')
 
-        objects_count = -1
+        objects_count = 0
         regex = 'ns={}:set={}:objects=(\d+)?:'.format(self.namespace, self.set)
 
         for cluster_id, info in clusters_info.items():
             count = re.findall(regex, info[1])
             if count:
-                objects_count = max(objects_count, int(count[0]))
+                objects_count += int(count[0])
 
-        if objects_count == -1:
-            raise AssertionError('Invalid namespace-set')
+        if objects_count == 0:
+            raise AssertionError('Invalid namespace-set or no records found')
         return objects_count
 
     def _get_bins(self, select_keys, record):
